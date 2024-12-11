@@ -22,6 +22,11 @@ int main(){
             printf("msh> ");
             continue;
         }
+
+        if (linea->background){
+            //caso del mandato en background
+        }
+
         if(linea->ncommands == 1){
             //caso de 1 mandato
         } else if (linea->ncommands == 2){
