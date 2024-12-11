@@ -7,15 +7,17 @@
 
 int main(){    
     printf("msh> "); //prompt
-    char input[BUFF];//buffer
-    
+    char input[BUFF];//buffer    
 
     //Ignora las señales:
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, SIG_IGN);
 
-    while(fgets(input, BUFF, stdin)){ //lee de teclado en cada iteración
+    while(fgets(input, BUFF, stdin)){ //lee de teclado
         tline * linea = tokenize(input);//tokeniza
+
+        signal(SIGINT, SIG_IGN);
+        signal(SIGQUIT, SIG_IGN);//volvemos a ignorar las señales en cada iteración del bucle        
 
         if(linea->ncommands == 0){ 
             //si no tiene comandos imprime el prompt y espera otro comando
