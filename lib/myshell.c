@@ -75,10 +75,99 @@ int main() {
                     fprintf(stderr, "El hijo no terminó normalmente.\n");
                 }
             }
+        //Caso de 2 mandatos    
+        } else if (linea->ncommands == 2) {
+            int pipe_fd[2]; // Descriptores de la tubería
+            pid_t pid1, pid2; // Identificadores de los procesos hijos
+            int status1, status2; // Estados para los hijos
+
+            // Crear la tubería
+            if (pipe(pipe_fd) == -1) {
+                fprintf(stderr, "ERROR al crear la tubería. Error: %s\n", strerror(errno));
+                continue; // Saltar al siguiente ciclo
+            }
+
+            // Crear el primer proceso (comando izquierdo)
+            pid1 = fork();
+            if (pid1 < 0) {
+                fprintf(stderr, "ERROR al crear el primer hijo. Error: %s\n", strerror(errno));
+                close(pipe_fd[0]);
+                close(pipe_fd[1]);
+                continue;
+            }
+
+            if (pid1 == 0) { // Proceso hijo 1
+                signal(SIGINT, SIG_DFL);  // Restaurar señales
+                signal(SIGQUIT, SIG_DFL);
+
+                close(pipe_fd[0]); // Cerrar el extremo de lectura de la tubería
+                if (dup2(pipe_fd[1], STDOUT_FILENO) == -1) { // Redirigir stdout
+                    fprintf(stderr, "ERROR al redirigir la salida estándar. Error: %s\n", strerror(errno));
+                    exit(1);
+                }
+                close(pipe_fd[1]); // Cerrar el extremo de escritura (ya redirigido)
+
+                // Ejecutar el primer comando
+                execvp(linea->commands[0].filename, linea->commands[0].argv);
+
+                // Si execvp falla
+                fprintf(stderr, "ERROR al ejecutar el comando '%s'. Error: %s\n",
+                    linea->commands[0].filename, strerror(errno));
+                    exit(1);
+            }
+
+            // Crear el segundo proceso (comando derecho)
+            pid2 = fork();
+            if (pid2 < 0) {
+                fprintf(stderr, "ERROR al crear el segundo hijo. Error: %s\n", strerror(errno));
+                close(pipe_fd[0]);
+                close(pipe_fd[1]);
+                continue;
+            }
+
+            if (pid2 == 0) { // Proceso hijo 2
+                signal(SIGINT, SIG_DFL);  // Restaurar señales
+                signal(SIGQUIT, SIG_DFL);
+
+                close(pipe_fd[1]); // Cerrar el extremo de escritura de la tubería
+                if (dup2(pipe_fd[0], STDIN_FILENO) == -1) { // Redirigir stdin
+                    fprintf(stderr, "ERROR al redirigir la entrada estándar. Error: %s\n", strerror(errno));
+                    exit(1);
+                }
+                close(pipe_fd[0]); // Cerrar el extremo de lectura (ya redirigido)
+
+                // Ejecutar el segundo comando
+                execvp(linea->commands[1].filename, linea->commands[1].argv);
+
+                // Si execvp falla
+                fprintf(stderr, "ERROR al ejecutar el comando '%s'. Error: %s\n",
+                linea->commands[1].filename, strerror(errno));
+                exit(1);
+            }
+
+            // Proceso padre
+            close(pipe_fd[0]); // Cerrar ambos extremos de la tubería
+            close(pipe_fd[1]);
+
+            // Esperar a ambos procesos hijos
+            if (waitpid(pid1, &status1, 0) == -1) {
+                fprintf(stderr, "ERROR al esperar al primer hijo. Error: %s\n", strerror(errno));
+            }
+            if (waitpid(pid2, &status2, 0) == -1) {
+                fprintf(stderr, "ERROR al esperar al segundo hijo. Error: %s\n", strerror(errno));
+            }
+
+            // Verificar los estados de los hijos
+            if (WIFEXITED(status1) && WEXITSTATUS(status1) != 0) {
+                fprintf(stderr, "El comando '%s' terminó con código de salida %d.\n",
+                linea->commands[0].filename, WEXITSTATUS(status1));
+            }
+            if (WIFEXITED(status2) && WEXITSTATUS(status2) != 0) {
+                fprintf(stderr, "El comando '%s' terminó con código de salida %d.\n",
+                linea->commands[1].filename, WEXITSTATUS(status2));
+            }
         }
-        // Caso de dos mandatos (no implementado)
-        else if (linea->ncommands == 2) {
-        }
+
         // Caso de más de dos mandatos (no implementado)
         else {
         }
