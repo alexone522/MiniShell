@@ -2,23 +2,28 @@
 #include <stdlib.h>
 #include <signal.h>
 #include "parser.h"
+#include <dirent.h>     //Para DIR, opendir, closedir
 #include <sys/types.h>  // Para pid_t
 #include <unistd.h>     // Para fork, execvp
 #include <sys/wait.h>   // Para waitpid
 #include <string.h>     // Para strerror
 #include <errno.h>      // Para la variable errno
 #include <fcntl.h>      ///2/ Para redirección de archivos
-                        //3/ Cambiar descripción de lo de arriba por: "Para open, O_RDONLY, O_WRONLY"
 
 #define BUFF 1024
+#define MAX_PROCESOS_BG 100
+
+//Variables globales para background:
+pid_t bg_pids[MAX_PROCESOS_BG];
+char *bg_commands[MAX_PROCESOS_BG];
+int bg_count = 0;
 
 // Prototipos de funciones no implementadas
-void hacer_cd(tline *linea);        // Implementar comando `cd`
+void hacer_cd(char **argv, int argc);        // Implementar comando `cd`
 void exec_background(tline *linea); // Implementar procesos en background
 void jobs();                        // Implementar comando `jobs`
 void fg(pid_t pid);                 // Implementar comando `fg`
 void mas_mandatos(tline *linea);    // Implementar manejo de más de dos mandatos
-void ejecutar_dos_comandos_con_pipe(tline *linea); ///3/ Declaración de función para manejar pipes
 
 void un_mandato(tline *linea) {
     if (linea->commands[0].filename == NULL) {
@@ -88,107 +93,8 @@ void un_mandato(tline *linea) {
     }
 }
 
-void ejecutar_dos_comandos_con_pipe(tline *linea) { //3// Implementación de manejo de pipes
-    int pipe_fd[2]; // Descriptores de la tubería
-    pid_t pid1, pid2;
-
-    // Crear la tubería
-    if (pipe(pipe_fd) == -1) {
-        fprintf(stderr, "ERROR al crear la tubería: %s\n", strerror(errno));
-        return;
-    }
-
-    // Crear el primer proceso (comando izquierdo)
-    pid1 = fork();
-    if (pid1 < 0) {
-        fprintf(stderr, "ERROR al crear el primer hijo: %s\n", strerror(errno));
-        close(pipe_fd[0]);
-        close(pipe_fd[1]);
-        return;
-    }
-
-    if (pid1 == 0) { // Proceso hijo 1
-        signal(SIGINT, SIG_DFL);  // Restaurar señales
-        signal(SIGQUIT, SIG_DFL);
-
-        close(pipe_fd[0]); // Cerrar el extremo de lectura de la tubería
-        if (dup2(pipe_fd[1], STDOUT_FILENO) == -1) { // Redirigir stdout al pipe
-            fprintf(stderr, "ERROR al redirigir la salida estándar: %s\n", strerror(errno));
-            exit(1);
-        }
-        close(pipe_fd[1]); // Cerrar el extremo de escritura (ya redirigido)
-
-        // Manejar redirección de entrada si existe
-        if (linea->redirect_input != NULL) { //3// Redirección de entrada
-            int fd_in = open(linea->redirect_input, O_RDONLY);
-            if (fd_in == -1) {
-                fprintf(stderr, "ERROR al abrir el archivo de entrada '%s': %s\n", linea->redirect_input, strerror(errno));
-                exit(1);
-            }
-            if (dup2(fd_in, STDIN_FILENO) == -1) {
-                fprintf(stderr, "ERROR al redirigir la entrada: %s\n", strerror(errno));
-                close(fd_in);
-                exit(1);
-            }
-            close(fd_in);
-        }
-
-        execvp(linea->commands[0].filename, linea->commands[0].argv);
-
-        // Si execvp falla
-        fprintf(stderr, "ERROR al ejecutar el comando '%s': %s\n", linea->commands[0].filename, strerror(errno));
-        exit(1);
-    }
-
-    // Crear el segundo proceso (comando derecho)
-    pid2 = fork();
-    if (pid2 < 0) {
-        fprintf(stderr, "ERROR al crear el segundo hijo: %s\n", strerror(errno));
-        close(pipe_fd[0]);
-        close(pipe_fd[1]);
-        return;
-    }
-
-    if (pid2 == 0) { // Proceso hijo 2
-        signal(SIGINT, SIG_DFL);  // Restaurar señales
-        signal(SIGQUIT, SIG_DFL);
-
-        close(pipe_fd[1]); // Cerrar el extremo de escritura de la tubería
-        if (dup2(pipe_fd[0], STDIN_FILENO) == -1) { // Redirigir stdin al pipe
-            fprintf(stderr, "ERROR al redirigir la entrada estándar: %s\n", strerror(errno));
-            exit(1);
-        }
-        close(pipe_fd[0]); // Cerrar el extremo de lectura (ya redirigido)
-
-        // Manejar redirección de salida si existe
-        if (linea->redirect_output != NULL) { //3// Redirección de salida
-            int fd_out = open(linea->redirect_output, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-            if (fd_out == -1) {
-                fprintf(stderr, "ERROR al abrir el archivo de salida '%s': %s\n", linea->redirect_output, strerror(errno));
-                exit(1);
-            }
-            if (dup2(fd_out, STDOUT_FILENO) == -1) {
-                fprintf(stderr, "ERROR al redirigir la salida: %s\n", strerror(errno));
-                close(fd_out);
-                exit(1);
-            }
-            close(fd_out);
-        }
-
-        execvp(linea->commands[1].filename, linea->commands[1].argv);
-
-        // Si execvp falla
-        fprintf(stderr, "ERROR al ejecutar el comando '%s': %s\n", linea->commands[1].filename, strerror(errno));
-        exit(1);
-    }
-
-    // Proceso padre
-    close(pipe_fd[0]); // Cerrar ambos extremos de la tubería
-    close(pipe_fd[1]);
-
-    // Esperar a ambos procesos hijos
-    waitpid(pid1, NULL, 0);
-    waitpid(pid2, NULL, 0);
+void dos_mandatos(tline *linea) {
+    fprintf(stderr, "Manejo de dos mandatos aún no implementado.\n");
 }
 
 int main() {
@@ -229,9 +135,16 @@ int main() {
 
         // Manejar diferentes casos según el número de mandatos
         if (linea->ncommands == 1) {
-            un_mandato(linea);
-        } else if (linea->ncommands == 2) { ///3/ Verificar si hay 2 mandatos
-            ejecutar_dos_comandos_con_pipe(linea); 
+            if(strcmp(linea->commands->argv[0], "cd" == 0)){
+                hacer_cd(linea->commands[0].argv, linea->commands[0].argc);
+                continue;
+            } else if(strcmp(linea->commands->argv[0], "cd" == 0)) {
+                jobs();
+            } else{
+                un_mandato(linea);
+            }
+        } else if (linea->ncommands == 2) {
+            dos_mandatos(linea);
         } else {
             fprintf(stderr, "Manejo de más de dos mandatos aún no implementado.\n");
         }
@@ -241,16 +154,49 @@ int main() {
 }
 
 // Funciones no implementadas
-void hacer_cd(tline *linea) {
-    fprintf(stderr, "El comando 'cd' aún no está implementado.\n");
+void hacer_cd(char **argv, int argc) {
+    char *path = NULL;
+
+    if (argc == 1) { // Sin argumentos: cambiar al directorio HOME
+        path = getenv("HOME");
+        if (path == NULL) {
+            fprintf(stderr, "Error: No se pudo acceder a la variable de entorno HOME.\n");
+            return;
+        }
+    } else if (argc == 2) { // Con un argumento: cambiar al directorio especificado
+        path = argv[1];
+    } else { // Más de un argumento: error
+        fprintf(stderr, "Error: Demasiados argumentos para 'cd'. Uso: cd [directorio]\n");
+        return;
+    }
+
+    // Intentar cambiar al directorio especificado
+    if (chdir(path) != 0) {
+        fprintf(stderr, "Error: No se pudo cambiar al directorio '%s'. %s\n", path, strerror(errno));
+        return;
+    }
 }
+
 
 void exec_background(tline *linea) {
     fprintf(stderr, "Procesos en background aún no están implementados.\n");
 }
 
+// Función para listar procesos en background
 void jobs() {
-    fprintf(stderr, "El comando 'jobs' aún no está implementado.\n");
+    printf("Procesos en background:\n");
+    for (int i = 0; i < bg_count; i++) {
+        int status;
+        pid_t result = waitpid(bg_pids[i], &status, WNOHANG); // Verificar el estado del proceso
+        if (result == 0) {
+            // Proceso sigue en ejecución
+            printf("[%d] Running\t%s\n", bg_pids[i], bg_commands[i]);
+        } else if (result > 0) {
+            // Proceso terminó
+            printf("[%d] Finished\t%s\n", bg_pids[i], bg_commands[i]);
+            remove_background_process(bg_pids[i]); // Eliminarlo del arreglo
+        }
+    }
 }
 
 void fg(pid_t pid) {
