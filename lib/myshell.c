@@ -199,8 +199,69 @@ void jobs() {
     }
 }
 
+// Mover un proceso al foreground y restaurar terminal
 void fg(pid_t pid) {
-    fprintf(stderr, "El comando 'fg' aún no está implementado.\n");
+    if (pid <= 0) {
+        if (bg_count > 0) {
+            pid = bg_commands[bg_count - 1]; // Seleccionar el último proceso en background
+        } else {
+            fprintf(stderr, "Error: no hay procesos en background.\n");
+            return;
+        }
+    }
+
+    // Asegurarnos de que el PID sea válido
+    if (kill(pid, 0) == -1) {
+        perror("Error: el proceso no existe o no es válido");
+        return;
+    }
+
+    // Obtener el terminal de la shell
+    int terminal_fd = open("/dev/tty", O_RDWR); // Abrir el terminal
+    if (terminal_fd == -1) {
+        perror("Error al abrir el terminal");
+        return;
+    }
+
+    // Reasignar la entrada y salida estándar (stdin, stdout, stderr)
+    if (dup2(terminal_fd, STDIN_FILENO) == -1) {
+        perror("Error al redirigir stdin");
+        close(terminal_fd);
+        return;
+    }
+    if (dup2(terminal_fd, STDOUT_FILENO) == -1) {
+        perror("Error al redirigir stdout");
+        close(terminal_fd);
+        return;
+    }
+    if (dup2(terminal_fd, STDERR_FILENO) == -1) {
+        perror("Error al redirigir stderr");
+        close(terminal_fd);
+        return;
+    }
+
+    // Enviar señal SIGCONT para reanudar el proceso si estaba detenido
+    if (kill(pid, SIGCONT) == -1) {
+        perror("Error al enviar SIGCONT al proceso");
+        close(terminal_fd);
+        return;
+    }
+
+    // Esperar al proceso y moverlo al primer plano
+    int status;
+    printf("Moviendo proceso PID %d al primer plano...\n", pid);
+    if (waitpid(pid, &status, WUNTRACED) == -1) {
+        perror("Error al esperar al proceso");
+    } else {
+        // Si el proceso terminó, eliminarlo de la lista de jobs
+        if (WIFEXITED(status) || WIFSIGNALED(status)) {
+            remove_job(pid);
+        }
+        printf("Proceso PID %d finalizado.\n", pid);
+    }
+
+    // Cerrar el descriptor de terminal después de usarlo
+    close(terminal_fd);
 }
 
 void mas_mandatos(tline *linea) {
