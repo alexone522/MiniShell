@@ -7,11 +7,12 @@
 #include <sys/wait.h>   // Para waitpid
 #include <string.h>     // Para strerror
 #include <errno.h>      // Para la variable errno
+#include <fcntl.h>      ///2/ Para redirección de archivos
 
 #define BUFF 1024
 
 // Prototipos de funciones no implementadas
-void hacer_cd(tline *linea);       // Implementar comando `cd`
+void hacer_cd(tline *linea);        // Implementar comando `cd`
 void exec_background(tline *linea); // Implementar procesos en background
 void jobs();                        // Implementar comando `jobs`
 void fg(pid_t pid);                 // Implementar comando `fg`
@@ -35,6 +36,30 @@ void un_mandato(tline *linea) {
         // Restaurar señales predeterminadas
         signal(SIGINT, SIG_DFL);
         signal(SIGQUIT, SIG_DFL);
+        
+        ///2/ Manejo de redirecciones de entrada y salida
+        ///2/ Redirección de entrada
+        if (linea->redirect_input != NULL) {
+            int fd_in = open(linea->redirect_input, O_RDONLY);
+            if (fd_in < 0) {
+                fprintf(stderr, "ERROR al abrir el archivo de entrada '%s': %s\n",
+                        linea->redirect_input, strerror(errno));
+                exit(1);
+            }
+            dup2(fd_in, STDIN_FILENO); // Redirigir entrada estándar
+            close(fd_in);
+        }
+        ///2/ Redirección de salida
+        if (linea->redirect_output != NULL) {
+            int fd_out = open(linea->redirect_output, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd_out < 0) {
+                fprintf(stderr, "ERROR al abrir el archivo de salida '%s': %s\n",
+                        linea->redirect_output, strerror(errno));
+                exit(1);
+            }
+            dup2(fd_out, STDOUT_FILENO); // Redirigir salida estándar
+            close(fd_out);
+        }
 
         // Ejecutar el comando
         execvp(linea->commands[0].filename, linea->commands[0].argv);
@@ -134,4 +159,3 @@ void fg(pid_t pid) {
 void mas_mandatos(tline *linea) {
     fprintf(stderr, "El manejo de más de dos mandatos aún no está implementado.\n");
 }
-
