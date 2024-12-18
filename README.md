@@ -10,7 +10,7 @@
 
 3. **Ejecutar dos comandos en foreground con pipes (`|`), con redirección de entrada y salida**  
    - **Puntuación**: 1 punto  
-   - [ ] **Completado**  
+   - [X] **Completado**  
    - Descripción: Soporte para encadenar dos comandos con pipes y manejar redirecciones de entrada y salida.
 
 4. **Ejecutar más de dos comandos en foreground con pipes (`|`), con redirección de entrada y salida**  
