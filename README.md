@@ -5,7 +5,7 @@
 
 2. **Redirección de entrada y salida con un solo comando en foreground**  
    - **Puntuación**: 1 punto  
-   - [ ] **Completado**  
+   - [X] **Completado**  
    - Descripción: Soporte para redirigir entrada desde un archivo y salida a un archivo en un solo comando.
 
 3. **Ejecutar dos comandos en foreground con pipes (`|`), con redirección de entrada y salida**  
