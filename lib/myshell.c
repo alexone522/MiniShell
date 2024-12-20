@@ -12,6 +12,8 @@
 #define BUFF 1024
 
 // Declaración de funciones
+
+void hacer_cd(char **argv, int argc);        
 void ejecutar_comandos_con_pipe(tline *linea);
 void un_mandato(tline *linea);
 
@@ -24,14 +26,14 @@ void un_mandato(tline *linea) {
     }
 
     pid_t pid = fork(); // Crear un nuevo proceso
-    if (pid < 0) { 
+    if (pid < 0) { // Si hay un error al hacer el fork
         fprintf(stderr, "ERROR al crear el hijo: %s\n", strerror(errno));
         return;
     }
 
     if (pid == 0) { // Proceso hijo
-        signal(SIGINT, SIG_DFL); 
-        signal(SIGQUIT, SIG_DFL); 
+        signal(SIGINT, SIG_DFL); // Restaurar el comportamiento de la señal SIGINT
+        signal(SIGQUIT, SIG_DFL); // Restaurar el comportamiento de la señal SIGQUIT
 
         // Redirección de entrada desde un archivo si se especifica
         if (linea->redirect_input != NULL) {
@@ -147,6 +149,29 @@ void ejecutar_comandos_con_pipe(tline *linea) {
     }
 }
 
+//Funcion "cd"
+void hacer_cd(char **argv, int argc) {
+    char *path = NULL;
+
+    if (argc == 1) { // Sin argumentos: cambiar al directorio HOME
+        path = getenv("HOME");
+        if (path == NULL) {
+            fprintf(stderr, "Error: No se pudo acceder a la variable de entorno HOME.\n");
+            return;
+        }
+    } else if (argc == 2) { // Con un argumento: cambiar al directorio especificado
+        path = argv[1];
+    } else { // Más de un argumento: error
+        fprintf(stderr, "Error: Demasiados argumentos para 'cd'. Uso: cd [directorio]\n");
+        return;
+    }
+
+    // Intentar cambiar al directorio especificado
+    if (chdir(path) != 0) {
+        fprintf(stderr, "Error: No se pudo cambiar al directorio '%s'. %s\n", path, strerror(errno));
+        return;
+    }
+}
 
 // Función principal del shell
 int main() {
@@ -165,6 +190,12 @@ int main() {
 
         // Verificar si la línea contiene comandos
         if (!linea || !linea->commands || !linea->commands[0].filename) {
+            continue;
+        }
+
+        // Si el comando es 'cd', llamamos a la función hacer_cd
+        if(strcmp(linea->commands[0].argv[0], "cd") == 0){
+            hacer_cd(linea->commands[0].argv, linea->commands[0].argc);
             continue;
         }
 
