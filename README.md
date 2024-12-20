@@ -15,7 +15,7 @@
 
 4. **Ejecutar más de dos comandos en foreground con pipes (`|`), con redirección de entrada y salida**  
    - **Puntuación**: 4 puntos  
-   - [ ] **Completado**  
+   - [X] **Completado**  
    - Descripción: Soporte para encadenar más de dos comandos con pipes, gestionando redirecciones de entrada y salida.
 
 5. **Comando `cd` (cambio de directorio)**  
